@@ -73,7 +73,7 @@ class FcmChannel
                     'date' => Carbon::now(),
                     'auto' => $statistic->auto,
                     'status' => true,
-                    'sended' => $sended,
+                    'sending' => $sended,
                     'success' => $sended - $failed,
                     'failed' => $failed
                 ]);
