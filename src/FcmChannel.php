@@ -2,6 +2,7 @@
 
 namespace Williamcruzme\Fcm;
 
+use Carbon\Carbon;
 use Closure;
 use Illuminate\Notifications\Notification;
 use Williamcruzme\Fcm\Exceptions\CouldNotSendNotification;
@@ -53,13 +54,29 @@ class FcmChannel
             // Send notification
             if (is_array($token)) {
                 $partialTokens = array_chunk($token, self::MAX_TOKEN_PER_REQUEST, false);
+                $sended = count($token);
+                $failed = 0;
                 foreach ($partialTokens as $tokens) {
                     $report = $this->messaging()->sendMulticast($message, $tokens);
+                    $failed += count($report->unknownTokens());
                     $unknownTokens = $report->unknownTokens();
                     if (! empty($unknownTokens)) {
                         $notifiable->devices()->whereIn('token', $unknownTokens)->get()->each->delete();
                     }
                 }
+                $statistic = (object)$message->toArray()['notification'];
+
+                resolve(config('fcm.statistic_class'))::create([
+                    'for' => $statistic->for,
+                    'title' => $statistic->title,
+                    'text' => $statistic->body,
+                    'date' => Carbon::now(),
+                    'auto' => $statistic->auto,
+                    'status' => true,
+                    'sended' => $sended,
+                    'success' => $sended - $failed,
+                    'failed' => $failed
+                ]);
             } else {
                 $message->token($token);
                 $this->messaging()->send($message);
