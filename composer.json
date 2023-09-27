@@ -1,5 +1,5 @@
 {
-    "name": "williamcruzme/laravel-fcm",
+    "name": "sv1ft/laravel-fcm",
     "type": "library",
     "description": "A powerful Laravel package to send Push Notifications",
     "keywords": [
@@ -10,9 +10,9 @@
       "license": "MIT",
       "authors": [
         {
-          "name": "williamcruzme",
-          "email": "sv.johncruz@gmail.com",
-          "homepage": "https://github.com/williamcruzme"
+          "name": "Sv1fT",
+          "email": "sv1ft.one@gmail.com",
+          "homepage": "https://github.com/sv1ft"
         }
       ],
     "require": {
