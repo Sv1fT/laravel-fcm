@@ -75,32 +75,46 @@ class FcmChannel
                         $notifiable->devices()->whereIn('token', $unknownTokens)->get()->each->delete();
                     }
                 }
+
+                $push->update([
+                    'for' => $statistic->for,
+                    'title' => $statistic->title,
+                    'text' => $statistic->body,
+                    'date' => Carbon::now(),
+                    'auto' => $statistic->auto,
+                    'status' => $sended - $failed >= 1 ? true : false,
+                    'sending' => $push->sending + $sended,
+                    'success' => $push->success + ($sended - $failed),
+                    'failed' => $push->failed + $failed
+                ]);
+
             } else {
                 $message->token($token);
-                $report = $this->messaging()->send($message);
-                $failed += count($report->unknownTokens()) ?? 0;
-                $unknownTokens = $report->unknownTokens();
-                if (! empty($unknownTokens)) {
-                    $notifiable->devices()->whereIn('token', $unknownTokens)->get()->each->delete();
+                if($this->messaging()->send($message)){
+                    $status = true;
+                } else {
+                    $status = false;
                 }
+                $push->update([
+                    'for' => $statistic->for,
+                    'title' => $statistic->title,
+                    'text' => $statistic->body,
+                    'date' => Carbon::now(),
+                    'auto' => $statistic->auto,
+                    'status' => $status,
+                    'sending' => $sended,
+                    'success' => $sended - $failed,
+                    'failed' => $failed
+                ]);
             }
 
-            $push->update([
-                'for' => $statistic->for,
-                'title' => $statistic->title,
-                'text' => $statistic->body,
-                'date' => Carbon::now(),
-                'auto' => $statistic->auto,
-                'status' => $sended - $failed >= 1 ? true : false,
-                'sending' => $push->sending + $sended,
-                'success' => $push->success + ($sended - $failed),
-                'failed' => $push->failed + $failed
-            ]);
+
         } catch (\Exception $exception) {
             Log::error($exception);
 //            $notifiable->devices()->get()->each->delete();
         }
     }
+
 
     /**
      * @return \Kreait\Firebase\Messaging
