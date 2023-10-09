@@ -6,7 +6,7 @@ use Carbon\Carbon;
 use Closure;
 use Illuminate\Notifications\Notification;
 use Williamcruzme\Fcm\Exceptions\CouldNotSendNotification;
-
+use Illuminate\Support\Facades\Log;
 class FcmChannel
 {
     /**
@@ -49,40 +49,56 @@ class FcmChannel
         if ($callback = static::$beforeSendingCallback) {
             $message = $callback($message, $notification, $notifiable);
         }
+        $statistic = (object)$message->toArray()['notification'];
+
+        $push = resolve(config('fcm.statistic_class'))::firstOrCreate([
+            'for' => $statistic->for,
+            'title' => $statistic->title,
+            'text' => $statistic->body,
+            'date' => Carbon::now(),
+            'auto' => $statistic->auto,
+            'status' => true
+        ]);
+
+        $sended = is_array($token)? count($token): 1;
+        $failed = 0;
 
         try {
             // Send notification
             if (is_array($token)) {
                 $partialTokens = array_chunk($token, self::MAX_TOKEN_PER_REQUEST, false);
-                $sended = count($token);
-                $failed = 0;
                 foreach ($partialTokens as $tokens) {
                     $report = $this->messaging()->sendMulticast($message, $tokens);
-                    $failed += count($report->unknownTokens());
+                    $failed += count($report->unknownTokens()) ?? 0;
                     $unknownTokens = $report->unknownTokens();
                     if (! empty($unknownTokens)) {
                         $notifiable->devices()->whereIn('token', $unknownTokens)->get()->each->delete();
                     }
                 }
-                $statistic = (object)$message->toArray()['notification'];
-
-                resolve(config('fcm.statistic_class'))::create([
-                    'for' => $statistic->for,
-                    'title' => $statistic->title,
-                    'text' => $statistic->body,
-                    'date' => Carbon::now(),
-                    'auto' => $statistic->auto,
-                    'status' => true,
-                    'sending' => $sended,
-                    'success' => $sended - $failed,
-                    'failed' => $failed
-                ]);
             } else {
                 $message->token($token);
-                $this->messaging()->send($message);
+                $report = $this->messaging()->send($message);
+                $failed += count($report->unknownTokens()) ?? 0;
+                $unknownTokens = $report->unknownTokens();
+                if (! empty($unknownTokens)) {
+                    $notifiable->devices()->whereIn('token', $unknownTokens)->get()->each->delete();
+                }
             }
+
+            $push->update([
+                'for' => $statistic->for,
+                'title' => $statistic->title,
+                'text' => $statistic->body,
+                'date' => Carbon::now(),
+                'auto' => $statistic->auto,
+                'status' => $sended - $failed >= 1 ? true : false,
+                'sending' => $push->sending + $sended,
+                'success' => $push->success + ($sended - $failed),
+                'failed' => $push->failed + $failed
+            ]);
         } catch (\Exception $exception) {
-            $notifiable->devices()->get()->each->delete();
+            Log::error($exception);
+//            $notifiable->devices()->get()->each->delete();
         }
     }
 
