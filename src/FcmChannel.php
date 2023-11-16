@@ -75,7 +75,7 @@ class FcmChannel
 
         } catch (\Exception $exception) {
 
-            $this->createPush($statistic, $token, $exception);
+            $this->createPush($statistic, $token, $exception->getMessage());
 //            $notifiable->devices()->get()->each->delete();
         }
     }
@@ -113,7 +113,7 @@ class FcmChannel
                     'status' => true,
                     'token' => $item,
                     'push_id' => $statistic->push->id,
-                    'error_message' => json_encode($error_message)
+                    'error_message' => $error_message
                 ]);
             }
         } else {
@@ -126,7 +126,7 @@ class FcmChannel
                 'status' => true,
                 'token' => $token,
                 'push_id' => $statistic->push->id,
-                'error_message' => json_encode($error_message)
+                'error_message' => $error_message
             ]);
         }
 
