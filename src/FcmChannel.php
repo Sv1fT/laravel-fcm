@@ -7,6 +7,7 @@ use Closure;
 use Illuminate\Notifications\Notification;
 use Williamcruzme\Fcm\Exceptions\CouldNotSendNotification;
 use Illuminate\Support\Facades\Log;
+
 class FcmChannel
 {
     /**
@@ -41,7 +42,7 @@ class FcmChannel
 
         // Get the message from the notification
         $message = $notification->toFcm($notifiable);
-        if (! $message instanceof FcmMessage) {
+        if (!$message instanceof FcmMessage) {
             throw CouldNotSendNotification::invalidMessage();
         }
 
@@ -51,66 +52,30 @@ class FcmChannel
         }
         $statistic = (object)$message->toArray()['notification'];
 
-        $push = resolve(config('fcm.statistic_class'))::firstOrCreate([
-            'for' => $statistic->for,
-            'title' => $statistic->title,
-            'text' => $statistic->body,
-            'date' => Carbon::now(),
-            'auto' => $statistic->auto,
-            'status' => true
-        ]);
-
-        $sended = is_array($token)? count($token): 1;
-        $failed = 0;
-
         try {
             // Send notification
             if (is_array($token)) {
                 $partialTokens = array_chunk($token, self::MAX_TOKEN_PER_REQUEST, false);
                 foreach ($partialTokens as $tokens) {
+                    $this->createPush($statistic, $tokens);
                     $report = $this->messaging()->sendMulticast($message, $tokens);
-                    $failed += count($report->unknownTokens()) ?? 0;
                     $unknownTokens = $report->unknownTokens();
-                    if (! empty($unknownTokens)) {
+                    if (!empty($unknownTokens)) {
                         $notifiable->devices()->whereIn('token', $unknownTokens)->get()->each->delete();
                     }
                 }
 
-                $push->update([
-                    'for' => $statistic->for,
-                    'title' => $statistic->title,
-                    'text' => $statistic->body,
-                    'date' => Carbon::now(),
-                    'auto' => $statistic->auto,
-                    'status' => $sended - $failed >= 1 ? true : false,
-                    'sending' => $push->sending + $sended,
-                    'success' => $push->success + ($sended - $failed),
-                    'failed' => $push->failed + $failed
-                ]);
-
             } else {
                 $message->token($token);
-                if($this->messaging()->send($message)){
-                    $status = true;
-                } else {
-                    $status = false;
-                }
-                $push->update([
-                    'for' => $statistic->for,
-                    'title' => $statistic->title,
-                    'text' => $statistic->body,
-                    'date' => Carbon::now(),
-                    'auto' => $statistic->auto,
-                    'status' => $status,
-                    'sending' => $sended,
-                    'success' => $sended - $failed,
-                    'failed' => $failed
-                ]);
+                $this->messaging()->send($message);
+
+                $this->createPush($statistic, $token);
+
             }
 
-
         } catch (\Exception $exception) {
-            Log::error($exception);
+
+            $this->createPush($statistic, $token, $exception);
 //            $notifiable->devices()->get()->each->delete();
         }
     }
@@ -127,11 +92,43 @@ class FcmChannel
     /**
      * Set the callback to be run before sending message.
      *
-     * @param  \Closure  $callback
+     * @param \Closure $callback
      * @return void
      */
     public static function beforeSending(Closure $callback)
     {
         static::$beforeSendingCallback = $callback;
+    }
+
+    private function createPush($statistic, $token, $error_message = null)
+    {
+        if (is_array($token)) {
+            foreach ($token as $item) {
+                resolve(config('fcm.statistic_class'))::create([
+                    'for' => $statistic->for,
+                    'title' => $statistic->title,
+                    'text' => $statistic->body,
+                    'date' => Carbon::now(),
+                    'auto' => $statistic->auto,
+                    'status' => true,
+                    'token' => $item,
+                    'push_id' => $statistic->push->id,
+                    'error_message' => json_encode($error_message)
+                ]);
+            }
+        } else {
+            resolve(config('fcm.statistic_class'))::create([
+                'for' => $statistic->for,
+                'title' => $statistic->title,
+                'text' => $statistic->body,
+                'date' => Carbon::now(),
+                'auto' => $statistic->auto,
+                'status' => true,
+                'token' => $token,
+                'push_id' => $statistic->push->id,
+                'error_message' => json_encode($error_message)
+            ]);
+        }
+
     }
 }
