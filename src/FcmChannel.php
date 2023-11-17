@@ -112,7 +112,7 @@ class FcmChannel
                     'auto' => $statistic->auto,
                     'status' => true,
                     'token' => $item,
-                    'push_id' => $statistic->push->id,
+                    'push_id' => $statistic->push? $statistic->push->id : null,
                     'error_message' => $error_message
                 ]);
             }
@@ -125,7 +125,7 @@ class FcmChannel
                 'auto' => $statistic->auto,
                 'status' => true,
                 'token' => $token,
-                'push_id' => $statistic->push->id,
+                'push_id' => $statistic->push? $statistic->push->id : null,
                 'error_message' => $error_message
             ]);
         }
